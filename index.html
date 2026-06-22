@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic English Rotating Clock</title>
+    <style>
+        /* 1. 基础样式和暗黑背景 */
+        body {
+            background-color: #050505;
+            font-family: "SF Pro Display", "Helvetica Neue", Arial, sans-serif; /* 适合英文的现代字体 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 2. 时钟容器（为适应英文长度，扩大了容器尺寸） */
+        .clock-container {
+            position: relative;
+            width: 1000px;
+            height: 1000px;
+        }
+
+        /* 3. 中心年份样式 */
+        .center-year {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: #fff;
+            z-index: 20;
+        }
+
+        /* 4. 圆环基础样式 */
+        .ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            transform-origin: 0 0; /* 中心点对齐 */
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* 5. 辐射状文字样式 - 修复了严格对齐问题 */
+        .ring span {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: auto;
+            white-space: nowrap;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 14px;      /* 固定行高 */
+            margin-top: -7px;       /* 向上偏移一半高度，实现完美的垂直居中对齐 */
+            transform-origin: 0 50%; /* 旋转中心点为文字左侧垂直正中 */
+            color: #333;            /* 默认暗色 */
+            transition: color 0.3s ease, text-shadow 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        /* 当前时间文字高亮 */
+        .ring span.highlight {
+            color: #fff; /* 纯白高亮 */
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8); /* 增加科幻发光感 */
+        }
+    </style>
+</head>
+<body>
+    <div class="clock-container">
+        <div class="center-year">2026</div>
+
+        <div class="ring ampm-ring" id="ampmRing"></div>
+        <div class="ring month-ring" id="monthRing"></div>
+        <div class="ring date-ring" id="dateRing"></div>
+        <div class="ring hour-ring" id="hourRing"></div>
+        <div class="ring minute-ring" id="minuteRing"></div>
+        <div class="ring second-ring" id="secondRing"></div>
+    </div>
+
+    <script>
+        // === 1. 英文格式化逻辑 ===
+
+        // 获取日期的英文序数词后缀 (1st, 2nd, 3rd, 4th...)
+        function getOrdinalSuffix(i) {
+            let j = i % 10, k = i % 100;
+            if (j === 1 && k !== 11) return i + "ST";
+            if (j === 2 && k !== 12) return i + "ND";
+            if (j === 3 && k !== 13) return i + "RD";
+            return i + "TH";
+        }
+
+        // 数字补零
+        function padZero(num) {
+            return num < 10 ? '0' + num : num;
+        }
+
+        // 核心：生成英文时间字符串
+        function numToEnglish(num, type) {
+            if (type === 'month') {
+                const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+                return months[num - 1];
+            }
+            else if (type === 'date') {
+                return getOrdinalSuffix(num);
+            }
+            else if (type === 'hour') {
+                return padZero(num) + ' HR';
+            }
+            else if (type === 'minute') {
+                return padZero(num) + ' MIN';
+            }
+            else if (type === 'second') {
+                return padZero(num) + ' SEC';
+            }
+        }
+
+        // === 2. 数据生成器 ===
+        function generateRingData(type) {
+            let data = [];
+            if (type === 'month') { for (let i = 1; i <= 12; i++) data.push(numToEnglish(i, type)); }
+            else if (type === 'date') { for (let i = 1; i <= 31; i++) data.push(numToEnglish(i, type)); }
+            else if (type === 'hour') { for (let i = 1; i <= 12; i++) data.push(numToEnglish(i, type)); }
+            else if (type === 'minute' || type === 'second') { for (let i = 0; i <= 59; i++) data.push(numToEnglish(i, type)); }
+            return data;
+        }
+
+        // === 3. DOM 构建与径向布局 ===
+        function createRingDom(id, data, radius) {
+            const ring = document.getElementById(id);
+            const angleStep = 360 / data.length;
+            data.forEach((text, index) => {
+                const span = document.createElement('span');
+                span.innerText = text;
+                const angle = index * angleStep;
+                // 仅执行旋转和向外平移，由于 CSS 中已设定 margin-top，此处自动实现完美直线对齐
+                span.style.transform = `rotate(${angle}deg) translateX(${radius}px)`;
+                ring.appendChild(span);
+            });
+        }
+
+        function initAmPmRing(radius) {
+            const ring = document.getElementById('ampmRing');
+            const data = ['AM', 'PM'];
+            data.forEach((text, index) => {
+                const span = document.createElement('span');
+                span.innerText = text;
+                const angle = index * 180;
+                span.style.transform = `rotate(${angle}deg) translateX(${radius}px)`;
+                ring.appendChild(span);
+            });
+        }
+
+        // === 4. 初始化同心圆半径（根据英文字符长度重新设定） ===
+        const monthsData = generateRingData('month');
+        const datesData = generateRingData('date');
+        const hoursData = generateRingData('hour');
+        const minutesData = generateRingData('minute');
+        const secondsData = generateRingData('second');
+
+        // 半径逐步增加，为英文长单词（如 SEPTEMBER）留足空间
+        initAmPmRing(60);                              // 内圈 AM/PM
+        createRingDom('monthRing', monthsData, 100);   // 月份圈
+        createRingDom('dateRing', datesData, 190);     // 日期圈
+        createRingDom('hourRing', hoursData, 250);     // 小时圈
+        createRingDom('minuteRing', minutesData, 315); // 分钟圈
+        createRingDom('secondRing', secondsData, 390); // 外圈秒数
+
+        // === 5. 核心渲染与旋转对齐驱动 ===
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            const second = now.getSeconds();
+
+            document.querySelector('.center-year').innerText = year;
+
+            updateAmPmRing(hour);
+            updateRing('monthRing', month, monthsData.length, 'month');
+            updateRing('dateRing', date, datesData.length, 'date');
+            updateRing('hourRing', hour, hoursData.length, 'hour');
+            updateRing('minuteRing', minute, minutesData.length, 'minute');
+            updateRing('secondRing', second, secondsData.length, 'second');
+        }
+
+        function updateAmPmRing(hour) {
+            const ring = document.getElementById('ampmRing');
+            const spans = ring.querySelectorAll('span');
+            const activeIndex = hour >= 12 ? 1 : 0; // 0=AM, 1=PM
+
+            spans.forEach((span, i) => span.classList.toggle('highlight', i === activeIndex));
+            const rotationAngle = 0 - (activeIndex * 180);
+            ring.style.transform = `rotate(${rotationAngle}deg)`; // 简化旋转逻辑，严格居中
+        }
+
+        function updateRing(id, currentValue, dataLength, type) {
+            const ring = document.getElementById(id);
+            const spans = ring.querySelectorAll('span');
+            const angleStep = 360 / dataLength;
+            let index;
+
+            if (type === 'hour') {
+                currentValue = currentValue % 12;
+                if (currentValue === 0) currentValue = 12;
+            }
+
+            if (type === 'month' || type === 'date' || type === 'hour') {
+                index = currentValue - 1;
+            } else {
+                index = currentValue;
+            }
+
+            spans.forEach((span, i) => span.classList.toggle('highlight', i === index));
+
+            // 将当前高亮文书旋转至水平右侧（0度位置）
+            const rotationAngle = 0 - (index * angleStep);
+            ring.style.transform = `rotate(${rotationAngle}deg)`;
+        }
+
+        // === 6. 启动时钟 ===
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>
